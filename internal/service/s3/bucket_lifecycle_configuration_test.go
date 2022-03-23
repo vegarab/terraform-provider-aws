@@ -842,6 +842,89 @@ func TestAccS3BucketLifecycleConfiguration_EmptyFilter_NonCurrentVersions(t *tes
 		},
 	})
 }
+func TestAccS3BucketLifecycleConfiguration_migrate_noChange(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	resourceName := "aws_s3_bucket_lifecycle_configuration.test"
+	bucketResourceName := "aws_s3_bucket.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { acctest.PreCheck(t) },
+		ErrorCheck:        acctest.ErrorCheck(t, s3.EndpointsID),
+		ProviderFactories: acctest.ProviderFactories,
+		CheckDestroy:      testAccCheckBucketLifecycleConfigurationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBucketConfig_withLifecycleExpireMarker(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBucketExists(bucketResourceName),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.#", "1"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.id", "id1"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.enabled", "true"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.prefix", "path1/"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.expiration.0.days", "0"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.expiration.0.date", ""),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.expiration.0.expired_object_delete_marker", "true"),
+				),
+			},
+			{
+				Config: testAccBucketLifecycleConfiguration_Migrate_NoChangeConfig(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBucketLifecycleConfigurationExists(resourceName),
+					resource.TestCheckResourceAttrPair(resourceName, "bucket", bucketResourceName, "bucket"),
+					resource.TestCheckResourceAttr(resourceName, "rule.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.id", "id1"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.status", "Enabled"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.prefix", "path1/"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.expiration.0.days", "0"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.expiration.0.date", ""),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.expiration.0.expired_object_delete_marker", "true"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccS3BucketLifecycleConfiguration_migrate_withChange(t *testing.T) {
+	rName := sdkacctest.RandomWithPrefix(acctest.ResourcePrefix)
+	resourceName := "aws_s3_bucket_lifecycle_configuration.test"
+	bucketResourceName := "aws_s3_bucket.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:          func() { acctest.PreCheck(t) },
+		ErrorCheck:        acctest.ErrorCheck(t, s3.EndpointsID),
+		ProviderFactories: acctest.ProviderFactories,
+		CheckDestroy:      testAccCheckBucketLifecycleConfigurationDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBucketConfig_withLifecycleExpireMarker(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBucketExists(bucketResourceName),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.#", "1"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.id", "id1"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.enabled", "true"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.prefix", "path1/"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.expiration.0.days", "0"),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.expiration.0.date", ""),
+					resource.TestCheckResourceAttr(bucketResourceName, "lifecycle_rule.0.expiration.0.expired_object_delete_marker", "true"),
+				),
+			},
+			{
+				Config: testAccBucketLifecycleConfiguration_Migrate_WithChangeConfig(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckBucketLifecycleConfigurationExists(resourceName),
+					resource.TestCheckResourceAttrPair(resourceName, "bucket", bucketResourceName, "bucket"),
+					resource.TestCheckResourceAttr(resourceName, "rule.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.id", "id1"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.status", "Disabled"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.prefix", "path1/"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.expiration.0.days", "0"),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.expiration.0.date", ""),
+					resource.TestCheckResourceAttr(resourceName, "rule.0.expiration.0.expired_object_delete_marker", "false"),
+				),
+			},
+		},
+	})
+}
 
 func testAccCheckBucketLifecycleConfigurationDestroy(s *terraform.State) error {
 	conn := acctest.Provider.Meta().(*conns.AWSClient).S3Conn
@@ -1583,4 +1666,58 @@ resource "aws_s3_bucket_lifecycle_configuration" "test" {
   }
 }
 `, rName, date, sizeGreaterThan, sizeLessThan)
+}
+
+func testAccBucketLifecycleConfiguration_Migrate_NoChangeConfig(rName string) string {
+	return fmt.Sprintf(`
+resource "aws_s3_bucket" "test" {
+  bucket = %[1]q
+}
+
+resource "aws_s3_bucket_acl" "test" {
+  bucket = aws_s3_bucket.test.id
+  acl    = "private"
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "test" {
+  bucket = aws_s3_bucket.test.bucket
+
+  rule {
+    id     = "id1"
+    prefix = "path1/"
+    status = "Enabled"
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+  }
+}
+`, rName)
+}
+
+func testAccBucketLifecycleConfiguration_Migrate_WithChangeConfig(rName string) string {
+	return fmt.Sprintf(`
+resource "aws_s3_bucket" "test" {
+  bucket = %[1]q
+}
+
+resource "aws_s3_bucket_acl" "test" {
+  bucket = aws_s3_bucket.test.id
+  acl    = "private"
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "test" {
+  bucket = aws_s3_bucket.test.bucket
+
+  rule {
+    id     = "id1"
+    prefix = "path1/"
+    status = "Disabled"
+
+    expiration {
+      expired_object_delete_marker = false
+    }
+  }
+}
+`, rName)
 }
