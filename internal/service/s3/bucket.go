@@ -1903,64 +1903,6 @@ func resourceBucketInternalWebsiteUpdate(conn *s3.S3, d *schema.ResourceData) er
 	return err
 }
 
-func expandWebsiteConfiguration(l []interface{}) (*s3.WebsiteConfiguration, error) {
-	if len(l) == 0 || l[0] == nil {
-		return nil, nil
-	}
-
-	website, ok := l[0].(map[string]interface{})
-	if !ok {
-		return nil, nil
-	}
-
-	websiteConfiguration := &s3.WebsiteConfiguration{}
-
-	if v, ok := website["index_document"].(string); ok && v != "" {
-		websiteConfiguration.IndexDocument = &s3.IndexDocument{
-			Suffix: aws.String(v),
-		}
-	}
-
-	if v, ok := website["error_document"].(string); ok && v != "" {
-		websiteConfiguration.ErrorDocument = &s3.ErrorDocument{
-			Key: aws.String(v),
-		}
-	}
-
-	if v, ok := website["redirect_all_requests_to"].(string); ok && v != "" {
-		redirect, err := url.Parse(v)
-		if err == nil && redirect.Scheme != "" {
-			var redirectHostBuf bytes.Buffer
-			redirectHostBuf.WriteString(redirect.Host)
-			if redirect.Path != "" {
-				redirectHostBuf.WriteString(redirect.Path)
-			}
-			if redirect.RawQuery != "" {
-				redirectHostBuf.WriteString("?")
-				redirectHostBuf.WriteString(redirect.RawQuery)
-			}
-			websiteConfiguration.RedirectAllRequestsTo = &s3.RedirectAllRequestsTo{
-				HostName: aws.String(redirectHostBuf.String()),
-				Protocol: aws.String(redirect.Scheme),
-			}
-		} else {
-			websiteConfiguration.RedirectAllRequestsTo = &s3.RedirectAllRequestsTo{
-				HostName: aws.String(v),
-			}
-		}
-	}
-
-	if v, ok := website["routing_rules"].(string); ok && v != "" {
-		var unmarshaledRules []*s3.RoutingRule
-		if err := json.Unmarshal([]byte(v), &unmarshaledRules); err != nil {
-			return nil, err
-		}
-		websiteConfiguration.RoutingRules = unmarshaledRules
-	}
-
-	return websiteConfiguration, nil
-}
-
 ///////////////////////////////////////////// Expand and Flatten functions /////////////////////////////////////////////
 
 // Cors Rule functions
@@ -2616,6 +2558,64 @@ func flattenVersioning(versioning *s3.GetBucketVersioningOutput) []interface{} {
 }
 
 // Website functions
+
+func expandWebsiteConfiguration(l []interface{}) (*s3.WebsiteConfiguration, error) {
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+
+	website, ok := l[0].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	websiteConfiguration := &s3.WebsiteConfiguration{}
+
+	if v, ok := website["index_document"].(string); ok && v != "" {
+		websiteConfiguration.IndexDocument = &s3.IndexDocument{
+			Suffix: aws.String(v),
+		}
+	}
+
+	if v, ok := website["error_document"].(string); ok && v != "" {
+		websiteConfiguration.ErrorDocument = &s3.ErrorDocument{
+			Key: aws.String(v),
+		}
+	}
+
+	if v, ok := website["redirect_all_requests_to"].(string); ok && v != "" {
+		redirect, err := url.Parse(v)
+		if err == nil && redirect.Scheme != "" {
+			var redirectHostBuf bytes.Buffer
+			redirectHostBuf.WriteString(redirect.Host)
+			if redirect.Path != "" {
+				redirectHostBuf.WriteString(redirect.Path)
+			}
+			if redirect.RawQuery != "" {
+				redirectHostBuf.WriteString("?")
+				redirectHostBuf.WriteString(redirect.RawQuery)
+			}
+			websiteConfiguration.RedirectAllRequestsTo = &s3.RedirectAllRequestsTo{
+				HostName: aws.String(redirectHostBuf.String()),
+				Protocol: aws.String(redirect.Scheme),
+			}
+		} else {
+			websiteConfiguration.RedirectAllRequestsTo = &s3.RedirectAllRequestsTo{
+				HostName: aws.String(v),
+			}
+		}
+	}
+
+	if v, ok := website["routing_rules"].(string); ok && v != "" {
+		var unmarshaledRules []*s3.RoutingRule
+		if err := json.Unmarshal([]byte(v), &unmarshaledRules); err != nil {
+			return nil, err
+		}
+		websiteConfiguration.RoutingRules = unmarshaledRules
+	}
+
+	return websiteConfiguration, nil
+}
 
 func flattenBucketWebsite(ws *s3.GetBucketWebsiteOutput) ([]interface{}, error) {
 	if ws == nil {
